@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from django.contrib.auth.models import User
 from django.db import models
 
@@ -25,8 +27,24 @@ class DadosMedico(models.Model):
     especialidade = models.ForeignKey(Especialidades, on_delete=models.DO_NOTHING, null=True, blank=True)
     valor_consulta = models.FloatField(default=100)
 
+    @property
+    def proxima_data(self):
+        proxima_data = DatasAbertas.objects.filter(user=self.user).filter(data__gt=datetime.now()).filter(
+            agendado=False).order_by('data').first()
+
+        return proxima_data
+
     def __str__(self):
         return self.user.username
+
+
+class DatasAbertas(models.Model):
+    data = models.DateTimeField()
+    user = models.ForeignKey(User, on_delete=models.DO_NOTHING)
+    agendado = models.BooleanField(default=False)
+
+    def __str__(self):
+        return str(self.data)
 
 
 def is_medico(user):

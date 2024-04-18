@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from django.http import HttpResponse
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
@@ -5,7 +7,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.contrib.messages import constants
 
-from medico.models import Especialidades, DadosMedico, is_medico
+from medico.models import Especialidades, DadosMedico, is_medico, DatasAbertas
+from paciente.models import Consulta
 
 
 @login_required
@@ -26,7 +29,7 @@ def cadastro_medico(request):
                              constants.WARNING,
                              'Você já está cadastrado como médico.'
                              )
-        
+
         return redirect('medicos:abrir_horario')
 
     elif request.method == "POST":
@@ -71,5 +74,72 @@ def cadastro_medico(request):
         return redirect('medicos:abrir_horario')
 
 
+@login_required
 def abrir_horario(request):
-    return HttpResponse('funfa!!')
+
+    if not is_medico(request.user):
+        messages.add_message(request, constants.WARNING, 'Somente médicos podem acessar essa página.')
+        return redirect('usuarios:logout')
+
+    if request.method == "GET":
+
+        dados_medicos = DadosMedico.objects.get(user=request.user)
+        datas_abertas = DatasAbertas.objects.filter(user=request.user)
+
+        context = {
+            'dados_medicos': dados_medicos,
+            'datas_abertas': datas_abertas
+        }
+        return render(request, 'abrir_horario.html', context=context)
+
+    elif request.method == "POST":
+        data = request.POST.get('data')
+
+        data_formatada = datetime.strptime(data, "%Y-%m-%dT%H:%M")
+
+        if data_formatada <= datetime.now():
+            messages.add_message(request,
+                                 constants.WARNING,
+                                 'A data deve ser hoje ou em um dia futuro.'
+                                 )
+            return redirect('medicos:abrir_horario')
+
+        horario_abrir = DatasAbertas(
+            data=data,
+            user=request.user
+        )
+
+        horario_abrir.save()
+
+        messages.add_message(request,
+                             constants.SUCCESS,
+                             'Horário cadastrado com sucesso.'
+                             )
+        return redirect('medicos:abrir_horario')
+
+
+def consultas_medico(request):
+    if not is_medico(request.user):
+        messages.add_message(request,
+                             constants.WARNING,
+                             'Somente médicos podem acessar essa página.')
+        return redirect('usuarios:logout')
+
+    hoje = datetime.now().date()
+
+    consultas_hoje = Consulta.objects.filter(data_aberta__user=request.user).filter(
+                    data_aberta__data__gte=hoje).filter(
+                    data_aberta__data__lt=hoje + timedelta(days=1))
+
+    consultas_restantes = Consulta.objects.exclude(id__in=consultas_hoje.values('id'))
+
+    context = {
+        'consultas_hoje': consultas_hoje,
+        'consultas_restantes': consultas_restantes,
+        'is_medico': is_medico(request.user)
+    }
+
+    return render(request,
+                  'consultas_medico.html',
+                  context=context
+                  )
