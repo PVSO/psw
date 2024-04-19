@@ -5,8 +5,8 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.contrib.messages import constants
 
-from medico.models import DadosMedico, Especialidades, DatasAbertas
-from paciente.models import Consulta
+from medico.models import DadosMedico, Especialidades, DatasAbertas, is_medico
+from paciente.models import Consulta, Documento
 
 
 def home(request):
@@ -27,7 +27,8 @@ def home(request):
 
         context = {
             'medicos': medicos,
-            'especialidades': especialidades
+            'especialidades': especialidades,
+            'is_medico': is_medico(request.user)
         }
 
         return render(request,
@@ -43,7 +44,8 @@ def escolher_horario(request, id_dados_medicos):
 
         context = {
             'medico': medico,
-            'datas_abertas': datas_abertas
+            'datas_abertas': datas_abertas,
+            'is_medico': is_medico(request.user)
         }
 
         return render(request,
@@ -82,6 +84,25 @@ def minhas_consultas(request):
         minhas_consultas = Consulta.objects.filter(paciente=request.user).filter(data_aberta__data__gte=datetime.now())
 
         context = {
-            'minhas_consultas': minhas_consultas
+            'minhas_consultas': minhas_consultas,
+            'is_medico': is_medico(request.user)
         }
         return render(request, 'minhas_consultas.html', context=context)
+
+
+def consulta(request, id_consulta):
+    if request.method == 'GET':
+        consulta = Consulta.objects.get(id=id_consulta)
+        dado_medico = DadosMedico.objects.get(user=consulta.data_aberta.user)
+        documento = Documento.objects.filter(consulta=consulta)
+
+        context = {
+            'consulta': consulta,
+            'dado_medico': dado_medico,
+            'documento': documento,
+            'is_medico': is_medico(request.user)
+        }
+
+        return render(request, 'consulta.html', context=context)
+
+# fazer validaçõa de segurança no restante do código
